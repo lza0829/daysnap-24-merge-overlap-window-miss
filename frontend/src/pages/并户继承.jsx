@@ -122,6 +122,7 @@ export default function 并户继承() {
                   <th>源末镜日</th>
                   <th>源结转余额</th>
                   <th>源键暴露</th>
+                  <th>重叠窗票</th>
                   <th>valid</th>
                 </tr>
               </thead>
@@ -138,6 +139,13 @@ export default function 并户继承() {
                       <span className={x.源键暴露 ? "徽章 通" : "徽章 败"}>
                         {x.源键暴露 ? "暴露·只读归档" : "不暴露"}
                       </span>
+                    </td>
+                    <td>
+                      {x.报告?.窗票号 ? (
+                        <span className="徽章 通">{x.报告.窗票号}</span>
+                      ) : (
+                        <span className="徽章 败">空窗·禁</span>
+                      )}
                     </td>
                     <td>
                       <span className={x.valid ? "徽章 通" : "徽章 败"}>{x.valid ? "true" : "false"}</span>

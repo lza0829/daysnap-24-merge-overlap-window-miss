@@ -190,6 +190,7 @@ def 初始化库() -> None:
             "缺前日策略": "以零为开端",
             "重复抽取": "盖写同日快照",
             "并户口径": "源键只读归档",
+            "重叠窗票口径": "窗票强制坍缩",
         }.items():
             conn.execute("INSERT INTO 台参(键, 值) VALUES (?, ?)", (k, v))
     if conn.execute("SELECT COUNT(*) AS c FROM 账户").fetchone()["c"] == 0:

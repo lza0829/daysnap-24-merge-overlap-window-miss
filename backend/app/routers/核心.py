@@ -281,6 +281,7 @@ def 重置():
             "旁置簿",
             "装载批次",
             "并户凭证",
+            "重叠日窗票表",
         ):
             conn.execute(f"DELETE FROM {t}")
         conn.execute("DELETE FROM 账户")
@@ -298,6 +299,19 @@ def 取核证_24(键: str | None = None):
     conn = 连接()
     try:
         return _bf_mod_24.查现场(conn, 键)
+    finally:
+        conn.close()
+
+
+@路由.get("/核证/重叠日窗/票/{ticket}")
+def 取票核证_24(ticket: str):
+    """重叠窗票核证只读接口：票号、重叠日、源正式有无、回放是否加倍、valid。"""
+    conn = 连接()
+    try:
+        视 = _bf_mod_24.核证一票(conn, ticket)
+        if 视 is None:
+            raise HTTPException(404, f"重叠窗票不存在: {ticket}")
+        return 视
     finally:
         conn.close()
 

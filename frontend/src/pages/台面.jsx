@@ -43,14 +43,15 @@ export default function 台面() {
       <p className="述">先装流水，再按营业日做日终抽取写周期快照，最后回放核对看差额清单是否清空。</p>
       <div className="提示条">
         最短路径：点「一键冒烟」→ 打开 <Link to="/周期快照">周期快照</Link> 与 <Link to="/差额清单">差额清单</Link>。
-        并户链用 <Link to="/并户继承">并户继承镜</Link> 的夹具跑。
+        并户链用 <Link to="/并户继承">并户继承镜</Link> 的夹具跑；重叠营业日窗票核证看{" "}
+        <Link to="/重叠日窗">重叠日窗核证</Link>。
       </div>
       <div className="阶条 六">
         <div className="阶"><div className="序">账户</div><b>{o.账户数 ?? "—"}</b><span>册内户数</span></div>
         <div className="阶"><div className="序">流水</div><b>{o.流水数 ?? "—"}</b><span>已入账</span></div>
         <div className="阶"><div className="序">快照</div><b>{o.快照数 ?? "—"}</b><span>有效行</span></div>
         <div className="阶"><div className="序">差额</div><b>{o.差额行数 ?? "—"}</b><span>清单行</span></div>
-        <div className="阶"><div className="序">旁置</div><b>{o.旁置数 ?? "—"}</b><span>未入账</span></div>
+        <div className="阶"><div className="序">窗票</div><b>{o.重叠窗票数 ?? "—"}</b><span>重叠窗·双露{o.重叠双露数 ?? 0}</span></div>
         <div className="阶"><div className="序">并户</div><b>{o.并户数 ?? "—"}</b><span>有效凭证</span></div>
       </div>
       <div className="行">

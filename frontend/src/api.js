@@ -39,5 +39,7 @@ export const api = {
   并户继承: (凭证) => 请求(`/并户/${encodeURIComponent(凭证)}`),
   执行并户: (体) => 请求("/并户", { method: "POST", body: JSON.stringify(体) }),
   并户夹具: (名) => 请求("/并户夹具", { method: "POST", body: JSON.stringify({ 名 }) }),
+  重叠窗现场: (键 = "") => 请求(`/核证/重叠日窗${键 ? `?键=${encodeURIComponent(键)}` : ""}`),
+  重叠窗票核证: (票号) => 请求(`/核证/重叠日窗/票/${encodeURIComponent(票号)}`),
   重置: () => 请求("/重置业务库", { method: "POST", body: "{}" }),
 };

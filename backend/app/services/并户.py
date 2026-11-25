@@ -14,11 +14,13 @@ import uuid
 from typing import Any
 
 from app.db import 连接
+from app.modules import 重叠日窗票 as 窗票
 from app.services.事务 import 立即事务
 from app.services.时间 import 此刻, 标准化营业日
 from app.services.镜链 import 计算开端, 当日流水净额, 前日, 有效快照
 
 执行口径 = "源键只读归档"
+窗票口径 = "窗票强制坍缩"
 
 
 def _校验账户(conn, 源: str, 目标: str, 生效日: str) -> tuple[dict, dict]:
@@ -144,13 +146,26 @@ def 执行并户(源: str, 目标: str, 生效日: str, 凭证编号: str = "") 
             结转余额 = int(源末["余额"])
             源末镜日 = 源末["营业日"]
 
-            
+            # 重叠营业日集合：源与目标全部共同营业日（并户后均呈源归档+目标正式的窗内并存）。
+            # 两户同日有镜后并户是入场前提；无共同镜日则窗票必空，失败闭。
+            重叠日 = 窗票.重叠日集合(conn, 源, 目标, 日)
+            if not 重叠日:
+                raise ValueError("两户无同营业日镜，禁止并户成功而重叠窗票空")
+
+            # 源户全部有效镜转归档；重叠日的归档镜额外标「重叠坍缩归档」隔离来源。
             归档 = conn.execute(
                 "UPDATE 周期快照 SET 状态='归档', "
                 "来源=CASE WHEN 营业日>=? THEN '并户归档' ELSE 来源 END "
                 "WHERE 账户键=? AND 状态='有效'",
                 (日, 源),
             ).rowcount
+            if 重叠日:
+                占位 = ",".join("?" for _ in 重叠日)
+                conn.execute(
+                    f"UPDATE 周期快照 SET 来源=? WHERE 账户键=? AND 状态='归档' "
+                    f"AND 营业日 IN ({占位})",
+                    (窗票.隔离来源, 源, *重叠日),
+                )
             生效日残留 = conn.execute(
                 "SELECT COUNT(*) AS c FROM 周期快照 WHERE 账户键=? AND 状态='归档' "
                 "AND 营业日>=? AND 来源='并户归档'",
@@ -184,11 +199,31 @@ def 执行并户(源: str, 目标: str, 生效日: str, 凭证编号: str = "") 
                 (凭, 源, 目标, 日, 源末镜日, 结转余额, 1, "有效", "{}", 此刻()),
             )
 
+            # 硬约束：并户成功必须同票开重叠窗票（源、目标、重叠日集合、票号）。
+            票号 = 窗票.开重叠窗(
+                conn,
+                源=源,
+                目标=目标,
+                生效日=日,
+                重叠日=重叠日,
+                凭证编号=凭,
+            )
+
             重算 = _重算目标镜(conn, 目标, 日)
             _断言无双户同日有效镜(conn, 源, 目标, 日)
+            if 窗票.双露行(conn, 源, 目标):
+                raise ValueError("重叠窗票覆盖日仍存在双户同日正式镜（双露），整笔回滚")
+            if not conn.execute(
+                "SELECT 1 FROM 重叠日窗票表 WHERE 票号=? AND 状态='有效' LIMIT 1",
+                (票号,),
+            ).fetchone():
+                raise ValueError("重叠窗票未落库，禁止并户成功而窗票空，整笔回滚")
 
             报告 = {
                 "口径": 执行口径,
+                "窗票口径": 窗票口径,
+                "窗票号": 票号,
+                "重叠日": 重叠日,
                 "源": 源,
                 "目标": 目标,
                 "生效日": 日,
@@ -201,6 +236,7 @@ def 执行并户(源: str, 目标: str, 生效日: str, 凭证编号: str = "") 
                 "差额置失效": 差额失效,
                 "重算目标镜": 重算,
                 "双户同日有效镜": 0,
+                "回放加倍": False,
             }
             conn.execute(
                 "UPDATE 并户凭证 SET 报告=? WHERE 凭证编号=?",
@@ -279,6 +315,11 @@ def 并户继承(凭证编号: str) -> dict | None:
         目标户 = conn.execute(
             "SELECT 状态, 并户去向 FROM 账户 WHERE 账户键=?", (凭["目标账户键"],)
         ).fetchone()
+        票行 = conn.execute(
+            "SELECT 票号 FROM 重叠日窗票表 WHERE 源键=? AND 目标键=? AND 状态='有效' "
+            "ORDER BY 编号 DESC LIMIT 1",
+            (凭["源账户键"], 凭["目标账户键"]),
+        ).fetchone()
         return {
             "凭证编号": 凭["凭证编号"],
             "源": 凭["源账户键"],
@@ -286,6 +327,8 @@ def 并户继承(凭证编号: str) -> dict | None:
             "生效日": 凭["生效日"],
             "源键暴露": 凭["源键暴露"],
             "valid": 凭["valid"],
+            "重叠窗票号": 票行["票号"] if 票行 else "",
+            "窗票口径": 窗票口径,
             "目标当前状态": 目标户["状态"] if 目标户 else "未知",
             "目标当前承接": (目标户["并户去向"] if 目标户 else "") or "",
             "上游源链": _链上目标(conn, 凭["源账户键"]),

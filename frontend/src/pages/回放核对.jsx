@@ -15,7 +15,10 @@ export default function 回放核对() {
   return (
     <div>
       <h1 className="题">回放核对</h1>
-      <p className="述">用前日快照加当日流水重算，对照周期快照，写出差额行。</p>
+      <p className="述">
+        用前日快照加当日流水重算，对照周期快照，写出差额行。持重叠窗票时回放只走目标键，
+        源隔离镜不参与，净额不加倍；窗票缺失/双露失败闭。
+      </p>
       <div className="行">
         <input value={日} onChange={(e) => set日(e.target.value)} />
         <button
@@ -25,7 +28,7 @@ export default function 回放核对() {
               .回放(日)
               .then((r) =>
                 set讯(
-                  `批次 ${r.批次编号} 通过=${r.通过} 相符=${r.相符} 差额=${r.差额} 无快照=${r.无快照}`
+                  `批次 ${r.批次编号} 通过=${r.通过} 相符=${r.相符} 差额=${r.差额} 无快照=${r.无快照} 回放加倍=${r.回放是否加倍 ?? false}`
                 )
               )
               .then(刷新)

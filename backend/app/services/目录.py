@@ -19,9 +19,22 @@ def 总览() -> dict:
             "归档快照数": 数("SELECT COUNT(*) FROM 周期快照 WHERE 状态='归档'"),
             "抽取批次数": 数("SELECT COUNT(*) FROM 抽取批次"),
             "回放批次数": 数("SELECT COUNT(*) FROM 回放批次"),
+            "重叠窗票数": 数("SELECT COUNT(DISTINCT 票号) FROM 重叠日窗票表 WHERE 状态='有效'"),
+            "重叠双露数": _双露数(conn),
         }
     finally:
         conn.close()
+
+
+def _双露数(conn) -> int:
+    return int(
+        conn.execute(
+            "SELECT COUNT(*) FROM 重叠日窗票表 w "
+            "JOIN 周期快照 s ON s.账户键=w.源键 AND s.营业日=w.重叠日 AND s.状态='有效' "
+            "JOIN 周期快照 t ON t.账户键=w.目标键 AND t.营业日=w.重叠日 AND t.状态='有效' "
+            "WHERE w.状态='有效'"
+        ).fetchone()[0]
+    )
 
 def _bf_overview_24() -> dict:
     return {"nn": "24", "proof_linked": False, "gates": []}

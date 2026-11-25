@@ -14,12 +14,14 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from app.db import 夹具目录, 连接
+from app.modules import 重叠日窗票 as 窗票
 from app.services import 并户 as 并户服务
 from app.services import 回放, 抽取, 装载
 from app.services.时间 import 标准化营业日
 from app.services.镜链 import 有效快照
 
 默认夹具 = "并户继承样例.json"
+重叠夹具 = "并户重叠窗票样例.json"
 
 
 def _读(名: str) -> dict:
@@ -127,12 +129,16 @@ def 执行夹具(名: str = "") -> dict[str, Any]:
         收尾回放 = [回放.回放核对(日) for 日 in 数据.get("收尾回放", [])]
         并户声明 = next((o for o in 数据.get("并发操作") or [] if o.get("类型") == "并户"), None)
         凭证 = ""
+        票号 = ""
         if 并户声明:
             凭证 = str(并户声明.get("凭证编号") or "")
             if not 凭证:
                 for r in 并发结果:
                     if r["完成"] and r["操作"].get("类型") == "并户":
                         凭证 = str(r["结果"].get("凭证编号") or "")
+        if 并户声明:
+            票号 = _并户票号(并户声明["源"], 并户声明["目标"])
+        窗核证 = _窗票核证视图(票号) if 票号 else None
         return {
             "夹具": 名,
             "并发": True,
@@ -143,6 +149,8 @@ def 执行夹具(名: str = "") -> dict[str, Any]:
             "收尾抽取": 收尾抽取,
             "收尾回放": 收尾回放,
             "凭证编号": 凭证,
+            "窗票号": 票号,
+            "窗票核证": 窗核证,
             "双户同日有效镜": (
                 _双户同日有效镜(
                     并户声明["源"], 并户声明["目标"], 标准化营业日(并户声明["生效日"])
@@ -150,6 +158,7 @@ def 执行夹具(名: str = "") -> dict[str, Any]:
                 if 并户声明
                 else []
             ),
+            "重叠双露": _全局双露() if 票号 else [],
         }
 
     并户声明 = 数据.get("并户") or {}
@@ -200,8 +209,41 @@ def 执行夹具(名: str = "") -> dict[str, Any]:
                 "通过": 生效日余额 is not None,
             }
         )
+        票号 = str(并户结果.get("窗票号") or "")
+        窗核证 = _窗票核证视图(票号) if 票号 else None
+        校验.append(
+            {
+                "项": "并户成功同票开重叠窗票",
+                "值": 票号,
+                "通过": bool(票号 and 窗核证 and 窗核证["valid"]),
+            }
+        )
+        校验.append(
+            {
+                "项": "重叠窗票禁止双露",
+                "值": _全局双露(),
+                "通过": _全局双露() == [],
+            }
+        )
+        if 窗核证:
+            校验.append(
+                {
+                    "项": "重叠日源正式镜清空",
+                    "值": 窗核证["源正式有无"],
+                    "通过": 窗核证["源正式有无"] is False,
+                }
+            )
+            校验.append(
+                {
+                    "项": "回放净额不加倍",
+                    "值": 窗核证["回放是否加倍"],
+                    "通过": 窗核证["回放是否加倍"] is False,
+                }
+            )
     else:
         凭证 = ""
+        票号 = ""
+        窗核证 = None
 
     return {
         "夹具": 名,
@@ -214,6 +256,8 @@ def 执行夹具(名: str = "") -> dict[str, Any]:
         "后抽取": 后抽取,
         "回放": 回放们,
         "凭证编号": 凭证,
+        "窗票号": 票号,
+        "窗票核证": 窗核证,
         "校验": 校验,
     }
 
@@ -256,5 +300,36 @@ def _源归档(源: str) -> int:
                 "SELECT COUNT(*) AS c FROM 周期快照 WHERE 账户键=? AND 状态='归档'", (源,)
             ).fetchone()["c"]
         )
+    finally:
+        conn.close()
+
+
+def _并户票号(源: str, 目标: str) -> str:
+    conn = 连接()
+    try:
+        row = conn.execute(
+            "SELECT 票号 FROM 重叠日窗票表 WHERE 源键=? AND 目标键=? AND 状态='有效' "
+            "ORDER BY 编号 DESC LIMIT 1",
+            (源, 目标),
+        ).fetchone()
+        return row["票号"] if row else ""
+    finally:
+        conn.close()
+
+
+def _窗票核证视图(票号: str) -> dict | None:
+    if not 票号:
+        return None
+    conn = 连接()
+    try:
+        return 窗票.核证一票(conn, 票号)
+    finally:
+        conn.close()
+
+
+def _全局双露() -> list[dict]:
+    conn = 连接()
+    try:
+        return 窗票.双露行(conn)
     finally:
         conn.close()

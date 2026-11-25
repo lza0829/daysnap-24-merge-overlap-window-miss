@@ -23,7 +23,8 @@ export default function 周期快照() {
     <div>
       <h1 className="题">周期快照</h1>
       <p className="述">
-        每个账户每个营业日一行有效余额镜。并户后源户镜转「归档」只读：默认只列有效镜，按源键查有效镜为空。
+        每个账户每个营业日一行有效余额镜。并户后源户镜转「归档」只读：默认只列有效镜，按源键查有效镜为空；
+        重叠窗票覆盖日的源归档镜来源标「重叠坍缩归档」，可读但不参与目标键净额。
       </p>
       <div className="行">
         <input value={日} onChange={(e) => set日(e.target.value)} placeholder="筛选营业日，可空" />
